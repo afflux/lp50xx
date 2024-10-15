@@ -8,6 +8,8 @@ use core::marker::PhantomData;
 use embedded_hal::delay::DelayNs;
 use embedded_hal::digital::OutputPin;
 
+pub type Color = (u8, [u8; 3]);
+
 #[derive(Debug)]
 pub enum Error {
     /// Generic communication Error with blocking I2C
@@ -291,11 +293,7 @@ where
     EN: OutputPin,
 {
     /// Set the channel brightness and RGB values
-    pub fn set(
-        &mut self,
-        mut channel: u8,
-        (brightness, [r, g, b]): (u8, [u8; 3]),
-    ) -> Result<(), Error> {
+    pub fn set(&mut self, mut channel: u8, (brightness, [r, g, b]): Color) -> Result<(), Error> {
         if channel < 1 {
             panic!("Specified Channel index must be greater than 0");
         }
@@ -307,6 +305,73 @@ where
         self.write(self.active_address, &[bright_addr, brightness])?;
         self.write(self.active_address, &[color_addr, r, g, b])?;
         Ok(())
+    }
+}
+
+impl<MODE, I2C, EN> LP50xx<MODE, I2C, EN>
+where
+    I2C: embedded_hal_async::i2c::I2c,
+    EN: OutputPin,
+{
+    /// Write data to the desired interface. If the i2C interface is provided,
+    /// it will perform a async call to I2C and return the result,
+    /// if I2C is not provided, it will panic
+    /// * `addr` - Address of the LP50xx
+    /// * `data` - The data payload to be sent
+    async fn async_write(&mut self, addr: Address, data: &[u8]) -> Result<(), Error> {
+        self.interface
+            .as_mut()
+            .unwrap()
+            .write(addr.into_u8(), data)
+            .await
+            .map_err(|_| Error::CommError)
+    }
+}
+
+impl<I2C, EN> LP50xx<ColorMode, I2C, EN>
+where
+    I2C: embedded_hal_async::i2c::I2c,
+    EN: OutputPin,
+{
+    pub async fn set_colors(&mut self, address: Address, leds: &[Color; 4]) -> Result<(), Error> {
+        let mut data = [0u8; 17];
+        data[0] = 0x07; // base register address
+
+        for (i, color) in IntoIterator::into_iter(leds).enumerate() {
+            data[1 + i] = color.0; // brightness
+            data[(5 + i * 3)..(5 + i * 3 + 3)].copy_from_slice(&color.1); // color
+        }
+
+        self.async_write(address, &data).await
+    }
+
+    pub async fn set_brightnesses(
+        &mut self,
+        address: Address,
+        leds: &[u8; 4],
+    ) -> Result<(), Error> {
+        let mut data = [0u8; 17];
+        data[0] = 0x07; // base register address
+        data[1..].copy_from_slice(leds);
+
+        self.async_write(address, &data).await
+    }
+
+    pub async fn set_bank_color(&mut self, address: Address, led: Color) -> Result<(), Error> {
+        let mut data = [0u8; 17];
+        data[0] = 0x03; // base register address
+        data[1] = led.0; // brightness
+        data[2..].copy_from_slice(&led.1); // color
+
+        self.async_write(address, &data).await
+    }
+
+    pub async fn set_bank_brightness(
+        &mut self,
+        address: Address,
+        brightness: u8,
+    ) -> Result<(), Error> {
+        self.async_write(address, &[0x03, brightness]).await
     }
 }
 

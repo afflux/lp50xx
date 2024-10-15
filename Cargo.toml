@@ -12,6 +12,7 @@ repository = "https://github.com/ost-ing/lp50xx"
 
 [dependencies]
 embedded-hal = { version = "1.0.0" }
+embedded-hal-async = "1.0.0"
 
 [features]
 default = []

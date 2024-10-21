@@ -345,6 +345,15 @@ where
         self.async_write(address, &data).await
     }
 
+    pub async fn set_colors(&mut self, address: Address, leds: &[[u8; 3]; 4]) -> Result<(), Error> {
+        let mut data = [0u8; 17];
+        data[0] = 0x0b; // base register address
+
+        let colors = unsafe { core::mem::transmute::<&[[u8; 3]; 4], &[u8; 3 * 4]>(leds) };
+        data[1..(1 + 3 * 4)].copy_from_slice(colors); // color
+        self.async_write(address, &data).await
+    }
+
     pub async fn set_brightnesses(
         &mut self,
         address: Address,

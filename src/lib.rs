@@ -333,7 +333,7 @@ where
     I2C: embedded_hal_async::i2c::I2c,
     EN: OutputPin,
 {
-    pub async fn set_colors(&mut self, address: Address, leds: &[Color; 4]) -> Result<(), Error> {
+    pub async fn set_all(&mut self, address: Address, leds: &[Color; 4]) -> Result<(), Error> {
         let mut data = [0u8; 17];
         data[0] = 0x07; // base register address
 
@@ -346,7 +346,7 @@ where
     }
 
     pub async fn set_colors(&mut self, address: Address, leds: &[[u8; 3]; 4]) -> Result<(), Error> {
-        let mut data = [0u8; 17];
+        let mut data = [0u8; 13];
         data[0] = 0x0b; // base register address
 
         let colors = unsafe { core::mem::transmute::<&[[u8; 3]; 4], &[u8; 3 * 4]>(leds) };
@@ -359,7 +359,7 @@ where
         address: Address,
         leds: &[u8; 4],
     ) -> Result<(), Error> {
-        let mut data = [0u8; 17];
+        let mut data = [0u8; 5];
         data[0] = 0x07; // base register address
         data[1..].copy_from_slice(leds);
 
@@ -367,7 +367,7 @@ where
     }
 
     pub async fn set_bank_color(&mut self, address: Address, led: Color) -> Result<(), Error> {
-        let mut data = [0u8; 17];
+        let mut data = [0u8; 5];
         data[0] = 0x03; // base register address
         data[1] = led.0; // brightness
         data[2..].copy_from_slice(&led.1); // color

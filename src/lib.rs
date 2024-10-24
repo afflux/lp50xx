@@ -256,6 +256,23 @@ where
         self.write(Address::Broadcast, &[0x00, 0b01000000])
     }
 
+    pub fn disable(&mut self) -> Result<(), Error> {
+        self.enable.set_low().map_err(|_| Error::EnableLine)
+    }
+
+    /// Enable the LP50xx, this must be executed prior to any commands sent to the LP50xx
+    /// * `delay` - delay provider
+    pub fn enable_eh0<DELAY>(&mut self, delay: &mut DELAY) -> Result<(), Error>
+    where
+        DELAY: eh0::blocking::delay::DelayUs<u32>,
+    {
+        self.enable.set_low().map_err(|_| Error::EnableLine)?;
+        delay.delay_us(3);
+        self.enable.set_high().map_err(|_| Error::EnableLine)?;
+        delay.delay_us(500);
+        self.write(Address::Broadcast, &[0x00, 0b01000000])
+    }
+
     /// Configure the LP50xx. For information regarding each of these settings, please consult the datasheet.
     /// Currently configuring is only available for Broadcast
     /// * `log_scale` - Logarithmic scale dimming curve

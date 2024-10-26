@@ -256,8 +256,11 @@ where
         self.write(Address::Broadcast, &[0x00, 0b01000000])
     }
 
-    pub fn disable(&mut self) -> Result<(), Error> {
-        self.enable.set_low().map_err(|_| Error::EnableLine)
+    pub fn set_enabled(&mut self, arg: bool) -> Result<(), Error> {
+        self.write(
+            Address::Broadcast,
+            &[0x00, if arg { 0b01000000 } else { 0 }],
+        )
     }
 
     /// Enable the LP50xx, this must be executed prior to any commands sent to the LP50xx
@@ -270,7 +273,7 @@ where
         delay.delay_us(3);
         self.enable.set_high().map_err(|_| Error::EnableLine)?;
         delay.delay_us(500);
-        self.write(Address::Broadcast, &[0x00, 0b01000000])
+        self.set_enabled(true)
     }
 
     /// Configure the LP50xx. For information regarding each of these settings, please consult the datasheet.

@@ -10,7 +10,7 @@ use embedded_hal::digital::OutputPin;
 
 pub type Color = (u8, [u8; 3]);
 
-#[derive(Debug)]
+#[derive(Debug, defmt::Format)]
 pub enum Error {
     /// Generic communication Error with blocking I2C
     CommError,
@@ -90,12 +90,9 @@ impl MonochromaticMode {
 /// The LP50XX (LP5009 or LP5012) is a 9 or 12 pin LED controller by Texas Instruments
 pub struct LP50xx<MODE, I2C, EN> {
     /// I2C interface, used specifically for blocking writes to the LP50XX
-    interface: Option<I2C>,
+    interface: I2C,
     /// Enable line
     enable: EN,
-    /// Asynchronous transfer callback, useful for transferring data to a static DMA buffer or queue
-    /// When the blocking I2C interface is provided, this transfer_callback value is ignored
-    transfer_callback: Option<fn(addr: Address, data: &[u8])>,
     /// Continuous addressing allows intuitive numbering of banks/leds when multiple LP50XX chips are used
     /// in a daisy-chain configuration. For example, for the LP5009 if specifying the 9th led, the address will be 0x00
     /// but when specifying the 10th led, the address will be 0x01 (the next chip address)
@@ -122,32 +119,8 @@ where
         en.set_low().ok();
 
         Self {
-            interface: Some(i2c),
+            interface: i2c,
             enable: en,
-            transfer_callback: None,
-            model,
-            active_address: Address::Broadcast,
-            continuous_addressing: true,
-            mode: PhantomData,
-            brightness_factor: 1.0,
-        }
-    }
-
-    /// Initialize the LP50xx with a flexible asynchronous callback interface
-    /// * `model` - The model of the LP50xx
-    /// * `en` - The enable line
-    /// * `callback` - Callback for custom transmission of the address and dataframe.
-    pub fn init_with_callback(
-        model: Model,
-        mut en: EN,
-        callback: fn(addr: Address, data: &[u8]),
-    ) -> Self {
-        en.set_low().ok();
-
-        Self {
-            interface: None,
-            enable: en,
-            transfer_callback: Some(callback),
             model,
             active_address: Address::Broadcast,
             continuous_addressing: true,
@@ -169,7 +142,7 @@ where
     }
 
     /// Release underlying resources back to initiator
-    pub fn release(self) -> (Option<I2C>, EN) {
+    pub fn release(self) -> (I2C, EN) {
         (self.interface, self.enable)
     }
 }
@@ -194,7 +167,6 @@ where
         LP50xx {
             interface: self.interface,
             enable: self.enable,
-            transfer_callback: self.transfer_callback,
             active_address: self.active_address,
             model: self.model,
             continuous_addressing: self.continuous_addressing,
@@ -209,22 +181,9 @@ where
     /// * `addr` - Address of the LP50xx
     /// * `data` - The data payload to be sent
     fn write(&mut self, addr: Address, data: &[u8]) -> Result<(), Error> {
-        // If there is an i2c interface provided, utilize it in a blocking fashion
-        if self.interface.is_some() {
-            self.interface
-                .as_mut()
-                .unwrap()
-                .write(addr.into_u8(), data)
-                .map_err(|_| Error::CommError)?;
-            return Ok({});
-        }
-
-        if self.transfer_callback.is_some() {
-            self.transfer_callback.unwrap()(addr, data);
-            return Ok({});
-        }
-
-        return Err(Error::NoInterfaceDefined);
+        self.interface
+            .write(addr.into_u8(), data)
+            .map_err(|_| Error::CommError)
     }
 
     /// Reset the LP50xx
@@ -340,8 +299,6 @@ where
     /// * `data` - The data payload to be sent
     async fn async_write(&mut self, addr: Address, data: &[u8]) -> Result<(), Error> {
         self.interface
-            .as_mut()
-            .unwrap()
             .write(addr.into_u8(), data)
             .await
             .map_err(|_| Error::CommError)

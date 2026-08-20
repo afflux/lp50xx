@@ -310,6 +310,20 @@ where
     I2C: embedded_hal_async::i2c::I2c,
     EN: OutputPin,
 {
+    /// Set the channel brightness and RGB values
+    pub async fn set_async(&mut self, address: Address, mut channel: u8, (brightness, [r, g, b]): Color) -> Result<(), Error> {
+        if channel < 1 {
+            panic!("Specified Channel index must be greater than 0");
+        }
+
+        channel = channel - 1;
+
+        let bright_addr = 0x07 + channel as u8;
+        let color_addr = 0x0b + (channel as u8) * 3;
+        self.async_write(address, &[bright_addr, brightness]).await?;
+        self.async_write(address, &[color_addr, r, g, b]).await
+    }
+
     pub async fn set_all(&mut self, address: Address, leds: &[Color; 4]) -> Result<(), Error> {
         let mut data = [0u8; 17];
         data[0] = 0x07; // base register address
